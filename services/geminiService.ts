@@ -1,10 +1,98 @@
 
-import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
+import { GoogleGenAI, GenerateContentResponse, Type } from "@google/genai";
 import { FullAnalysisResult, PersonaConfiguration, DialogueTurn } from '../types';
+
+const analysisSchema = {
+    type: Type.OBJECT,
+    properties: {
+        sflAnalysis: {
+            type: Type.OBJECT,
+            properties: {
+                processDistribution: {
+                    type: Type.OBJECT,
+                    properties: {
+                        material: { type: Type.NUMBER, description: "Percentage of material processes." },
+                        mental: { type: Type.NUMBER, description: "Percentage of mental processes." },
+                        relational: { type: Type.NUMBER, description: "Percentage of relational processes." },
+                        verbal: { type: Type.NUMBER, description: "Percentage of verbal processes." },
+                    },
+                    required: ['material', 'mental', 'relational', 'verbal']
+                },
+                technicality: {
+                    type: Type.OBJECT,
+                    properties: {
+                        score: { type: Type.NUMBER, description: "Technicality score from 1-10." },
+                        description: { type: Type.STRING, description: "Brief description of the technicality score." },
+                    },
+                    required: ['score', 'description']
+                },
+                modalityProfile: { type: Type.STRING, description: "Summary of the document's modality profile." },
+                appraisalSummary: { type: Type.STRING, description: "Summary of the use of evaluative language." },
+                cohesionSummary: { type: Type.STRING, description: "Summary of the primary cohesive devices used." },
+            },
+            required: ['processDistribution', 'technicality', 'modalityProfile', 'appraisalSummary', 'cohesionSummary']
+        },
+        personaMapping: {
+            type: Type.OBJECT,
+            properties: {
+                style: { type: Type.STRING, description: "The persona's communication style." },
+                confidence: { type: Type.STRING, description: "The persona's confidence level." },
+                stance: { type: Type.STRING, description: "The persona's stance." },
+                organization: { type: Type.STRING, description: "The persona's organizational approach to communication." },
+            },
+            required: ['style', 'confidence', 'stance', 'organization']
+        },
+        personaConfiguration: {
+            type: Type.OBJECT,
+            properties: {
+                ideational: {
+                    type: Type.OBJECT,
+                    properties: {
+                        materialProcesses: { type: Type.NUMBER },
+                        mentalProcesses: { type: Type.NUMBER },
+                        relationalProcesses: { type: Type.NUMBER },
+                        verbalProcesses: { type: Type.NUMBER },
+                        technicalityLevel: { type: Type.NUMBER },
+                        logicalRelations: { type: Type.STRING },
+                    },
+                    required: ['materialProcesses', 'mentalProcesses', 'relationalProcesses', 'verbalProcesses', 'technicalityLevel', 'logicalRelations']
+                },
+                interpersonal: {
+                    type: Type.OBJECT,
+                    properties: {
+                        statements: { type: Type.NUMBER },
+                        questions: { type: Type.NUMBER },
+                        offersCommands: { type: Type.NUMBER },
+                        probabilityModality: { type: Type.NUMBER },
+                        usualityModality: { type: Type.NUMBER },
+                        questioningFrequency: { type: Type.STRING },
+                        appraisal: { type: Type.STRING },
+                    },
+                    required: ['statements', 'questions', 'offersCommands', 'probabilityModality', 'usualityModality', 'questioningFrequency', 'appraisal']
+                },
+                textual: {
+                    type: Type.OBJECT,
+                    properties: {
+                        lexicalDensity: { type: Type.NUMBER },
+                        grammaticalIntricacy: { type: Type.NUMBER },
+                        referenceChains: { type: Type.STRING },
+                        conjunctiveAdverbs: { type: Type.STRING },
+                        thematicProgression: { type: Type.STRING },
+                        questionSequences: { type: Type.STRING },
+                    },
+                    required: ['lexicalDensity', 'grammaticalIntricacy', 'referenceChains', 'conjunctiveAdverbs', 'thematicProgression', 'questionSequences']
+                },
+            },
+            required: ['ideational', 'interpersonal', 'textual']
+        },
+    },
+    required: ['sflAnalysis', 'personaMapping', 'personaConfiguration']
+};
+
 
 const constructPrompt = (text: string): string => {
   return `
-    You are an expert in Systemic Functional Linguistics (SFL). Your task is to analyze the following source document, map the linguistic features to a persona profile, and generate a detailed persona configuration. Follow these steps precisely and return the output as a single, valid JSON object with no markdown formatting.
+    You are an expert in Systemic Functional Linguistics (SFL). Your task is to analyze the following source document, map the linguistic features to a persona profile, and generate a detailed persona configuration. Follow these steps precisely and return the output as a single, valid JSON object that adheres to the provided schema.
 
     **Source Document:**
     """
@@ -47,63 +135,7 @@ const constructPrompt = (text: string): string => {
     *   **Organization:** (e.g., Exploratory Questioning, Sequential Building)
 
     **Step 3: Generate Persona Configuration**
-    Based on the SFL analysis and mapping, generate a detailed persona configuration with specific scores and settings.
-
-    **Output Schema:**
-    Return a single, valid JSON object matching this exact structure:
-    \`\`\`json
-    {
-      "sflAnalysis": {
-        "processDistribution": {
-          "material": <number>,
-          "mental": <number>,
-          "relational": <number>,
-          "verbal": <number>
-        },
-        "technicality": {
-          "score": <number(1-10)>,
-          "description": "<string>"
-        },
-        "modalityProfile": "<string>",
-        "appraisalSummary": "<string>",
-        "cohesionSummary": "<string>"
-      },
-      "personaMapping": {
-        "style": "<string>",
-        "confidence": "<string>",
-        "stance": "<string>",
-        "organization": "<string>"
-      },
-      "personaConfiguration": {
-        "ideational": {
-          "materialProcesses": <number>,
-          "mentalProcesses": <number>,
-          "relationalProcesses": <number>,
-          "verbalProcesses": <number>,
-          "technicalityLevel": <number(1-10)>,
-          "logicalRelations": "<string e.g., Elaboration + Enhancement preference>"
-        },
-        "interpersonal": {
-          "statements": <number(%)>,
-          "questions": <number(%)>,
-          "offersCommands": <number(%)>,
-          "probabilityModality": <number(1-10)>,
-          "usualityModality": <number(1-10)>,
-          "questioningFrequency": "<string e.g., High, Medium, Low>",
-          "appraisal": "<string e.g., Contemplative + Appreciative + Evaluative>"
-        },
-        "textual": {
-          "lexicalDensity": <number(1-10)>,
-          "grammaticalIntricacy": <number(1-10)>,
-          "referenceChains": "<string e.g., Enabled (complex conceptual tracking)>",
-          "conjunctiveAdverbs": "<string e.g., Enabled (yet, however, therefore)>",
-          "thematicProgression": "<string e.g., Split Rheme (question branching)>",
-          "questionSequences": "<string e.g., Enabled>"
-        }
-      }
-    }
-    \`\`\`
-    Do not include any text, explanations, or markdown fences outside of the JSON object itself.
+    Based on the SFL analysis and mapping, generate a detailed persona configuration with specific scores and settings according to the required JSON schema.
     `;
 };
 
@@ -117,6 +149,7 @@ export const analyzeDocument = async (text: string, model: string, thinkingBudge
     
     const config: { [key: string]: any } = {
         responseMimeType: "application/json",
+        responseSchema: analysisSchema,
         temperature: 0.2,
     };
 
@@ -135,14 +168,7 @@ export const analyzeDocument = async (text: string, model: string, thinkingBudge
             throw new Error("The API returned an empty response. This may be due to content safety filters or other issues.");
         }
 
-        let jsonStr = response.text.trim();
-        
-        const fenceRegex = /^```(\w*)?\s*\n?(.*?)\n?\s*```$/s;
-        const match = jsonStr.match(fenceRegex);
-        if (match && match[2]) {
-          jsonStr = match[2].trim();
-        }
-
+        const jsonStr = response.text.trim();
         const parsedData: FullAnalysisResult = JSON.parse(jsonStr);
         return parsedData;
 
@@ -389,3 +415,22 @@ export const generateNextDialogueTurn = async (history: DialogueTurn[], nextSpea
         throw new Error("An unknown error occurred while generating the next line.");
     }
 }
+
+export const getAvailableModels = async (): Promise<string[]> => {
+    // In a real scenario, this would make an API call to list available models.
+    // For this demonstration, we'll simulate a network delay and return a
+    // list of plausible model names to show the dynamic fetching works.
+    console.log("Fetching available Gemini models...");
+    return new Promise(resolve => {
+        setTimeout(() => {
+            // The app is configured to default to 'gemini-2.5-flash' for generation
+            // tasks, but we list others here to demonstrate the UI's dynamic capability.
+            resolve([
+                'gemini-2.5-flash',
+                'gemini-2.0-flash',
+                'gemini-1.5-pro-latest',
+                'gemini-1.5-flash-latest'
+            ]);
+        }, 500); // Simulate network latency
+    });
+};

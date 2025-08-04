@@ -7,15 +7,21 @@ interface ModelSettingsProps {
     setModel: (model: string) => void;
     thinkingBudget: string;
     setThinkingBudget: (budget: string) => void;
+    serviceProvider: string;
+    setServiceProvider: (provider: string) => void;
+    availableModels: string[];
+    isModelsLoading: boolean;
+    modelsError: string | null;
 }
 
-const modelOptions = [
-    'gemini-2.5-flash'
-    // As per guidelines, only this model is supported for now.
-    // Other models can be added here in the future.
-];
+const providerOptions = ['Gemini']; // Future-proof for more providers
 
-export const ModelSettings: React.FC<ModelSettingsProps> = ({ model, setModel, thinkingBudget, setThinkingBudget }) => {
+export const ModelSettings: React.FC<ModelSettingsProps> = ({ 
+    model, setModel, 
+    thinkingBudget, setThinkingBudget, 
+    serviceProvider, setServiceProvider,
+    availableModels, isModelsLoading, modelsError 
+}) => {
     const [isOpen, setIsOpen] = useState(true);
     const supportsThinking = model === 'gemini-2.5-flash';
 
@@ -25,13 +31,24 @@ export const ModelSettings: React.FC<ModelSettingsProps> = ({ model, setModel, t
                 Model & Generation Settings
                 <span className={`transform transition-transform ${isOpen ? 'rotate-90' : 'rotate-0'}`}>{'>'}</span>
             </summary>
-            <div className="p-4 border-t border-[#5c6f7e] grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="p-4 border-t border-[#5c6f7e] grid grid-cols-1 md:grid-cols-3 gap-6">
                 <SelectInput 
-                    label="Active Model"
-                    value={model}
-                    onChange={setModel}
-                    options={modelOptions}
+                    label="Service Provider"
+                    value={serviceProvider}
+                    onChange={setServiceProvider}
+                    options={providerOptions}
                 />
+                <div>
+                    <SelectInput 
+                        label="Active Model"
+                        value={isModelsLoading ? 'Loading...' : model}
+                        onChange={setModel}
+                        options={availableModels}
+                        disabled={isModelsLoading || !!modelsError || availableModels.length === 0}
+                    />
+                    {modelsError && <p className="text-xs text-red-400 mt-1">{modelsError}</p>}
+                </div>
+
                 {supportsThinking && (
                     <div>
                         <label htmlFor="thinking-budget" className="block text-sm font-medium text-[#95aac0] mb-1">Thinking Budget</label>

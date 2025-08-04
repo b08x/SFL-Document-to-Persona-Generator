@@ -1,8 +1,8 @@
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { DocumentInput } from './components/DocumentInput';
 import { ResultsDisplay } from './components/ResultsDisplay';
-import { analyzeDocument, generateDialogue, refineDialogueTurn, generateNextDialogueTurn } from './services/geminiService';
+import { analyzeDocument, generateDialogue, refineDialogueTurn, generateNextDialogueTurn, getAvailableModels } from './services/geminiService';
 import { FullAnalysisResult, PersonaConfiguration, Persona, DialogueTurn } from './types';
 import { SparklesIcon } from './components/icons/SparklesIcon';
 import { HelpIcon } from './components/icons/HelpIcon';
@@ -17,6 +17,10 @@ const App: React.FC = () => {
     const [isHelpOpen, setIsHelpOpen] = useState(false);
 
     // Model settings state
+    const [serviceProvider, setServiceProvider] = useState<string>('Gemini');
+    const [availableModels, setAvailableModels] = useState<{ [provider: string]: string[] }>({});
+    const [isModelsLoading, setIsModelsLoading] = useState<boolean>(false);
+    const [modelsError, setModelsError] = useState<string | null>(null);
     const [model, setModel] = useState<string>('gemini-2.5-flash');
     const [thinkingBudget, setThinkingBudget] = useState<string>(''); // Keep as string for input control
 
@@ -43,6 +47,43 @@ const App: React.FC = () => {
         const num = parseInt(budget, 10);
         return isNaN(num) || num < 0 ? undefined : num;
     }, []);
+
+    useEffect(() => {
+        const fetchModels = async () => {
+            if (!serviceProvider) return; 
+            if (availableModels[serviceProvider]) { 
+                if (!availableModels[serviceProvider].includes(model)) {
+                    setModel(availableModels[serviceProvider][0] || '');
+                }
+                return;
+            }
+
+            setIsModelsLoading(true);
+            setModelsError(null);
+
+            try {
+                let models: string[] = [];
+                if (serviceProvider === 'Gemini') {
+                    models = await getAvailableModels();
+                }
+                
+                setAvailableModels(prev => ({ ...prev, [serviceProvider]: models }));
+                
+                if (!models.includes(model)) {
+                    setModel(models[0] || '');
+                }
+
+            } catch (err) {
+                const message = err instanceof Error ? err.message : 'An unknown error occurred';
+                setModelsError(`Failed to load models for ${serviceProvider}: ${message}`);
+                setModel('');
+            } finally {
+                setIsModelsLoading(false);
+            }
+        };
+
+        fetchModels();
+    }, [serviceProvider]);
 
     const handleAnalyze = useCallback(async (text: string) => {
         if (!text.trim()) {
@@ -255,6 +296,11 @@ const App: React.FC = () => {
                     setModel={setModel}
                     thinkingBudget={thinkingBudget}
                     setThinkingBudget={setThinkingBudget}
+                    serviceProvider={serviceProvider}
+                    setServiceProvider={setServiceProvider}
+                    availableModels={availableModels[serviceProvider] || []}
+                    isModelsLoading={isModelsLoading}
+                    modelsError={modelsError}
                 />
 
                 <main className="grid grid-cols-1 lg:grid-cols-2 lg:gap-8">
